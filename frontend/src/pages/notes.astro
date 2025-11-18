@@ -1,0 +1,174 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Sidebar from "../components/Sidebar.astro";
+import Editor from "../components/Editor.astro";
+import ConfirmModal from "../components/ConfirmModal.astro";
+import { getAPI, getLocalAPI, type Note } from "../lib/storage";
+
+const title = "Ocean Notes";
+---
+
+<Layout>
+  <main class="app">
+    <header class="appbar">
+      <div class="brand">
+        <div class="logo">🌊</div>
+        <div class="titles">
+          <h1>{title}</h1>
+          <small id="backendState">Loading…</small>
+        </div>
+      </div>
+    </header>
+    <section class="content" id="content">
+      <!-- Filled dynamically -->
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .app { min-height: 100dvh; display: flex; flex-direction: column; }
+  .appbar {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(90deg, rgba(37,99,235,0.08), rgba(249,250,251,0.7));
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+  .logo { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: linear-gradient(120deg, #2563EB, #0ea5e9); color: white; box-shadow: 0 4px 12px rgba(37,99,235,.3); }
+  .titles h1 { font-size: 18px; margin: 0; }
+  .titles small { color: var(--text-secondary); }
+  .content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    align-items: stretch;
+  }
+  @media (max-width: 900px) {
+    .content { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script type="module">
+  import Sidebar from "../components/Sidebar.astro";
+  import Editor from "../components/Editor.astro";
+  import ConfirmModal from "../components/ConfirmModal.astro";
+  import { getAPI, getLocalAPI } from "../lib/storage";
+
+  type Note = import("../lib/storage").Note;
+
+  let api = await getAPI();
+  const backendState = document.getElementById("backendState");
+  backendState!.textContent = api.online ? "Online (API)" : "Offline (Local)";
+
+  let notes: Note[] = await api.list();
+  let selectedId: string = notes[0]?.id ?? "";
+  let filter = "";
+  let showConfirm = false;
+
+  function render() {
+    const container = document.getElementById("content")!;
+    container.innerHTML = "";
+    const filtered = filter
+      ? notes.filter(n => (n.title + " " + n.content).toLowerCase().includes(filter.toLowerCase()))
+      : notes;
+
+    const sidebar = document.createElement("div");
+    sidebar.innerHTML = `${Astro.renderToString(Sidebar, {
+      notes: filtered,
+      selectedId,
+      onSelectId: "notes:select",
+      onCreate: "notes:create",
+      onSearch: "notes:search"
+    })}`;
+    container.appendChild(sidebar.firstElementChild!);
+
+    const current = notes.find(n => n.id === selectedId) ?? null;
+    const editor = document.createElement("div");
+    editor.innerHTML = `${Astro.renderToString(Editor, {
+      note: current,
+      onChange: "notes:change",
+      onDelete: "notes:delete"
+    })}`;
+    container.appendChild(editor.firstElementChild!);
+
+    if (showConfirm) {
+      const modal = document.createElement("div");
+      modal.innerHTML = `${Astro.renderToString(ConfirmModal, {
+        open: true,
+        message: "Delete this note? This cannot be undone.",
+        onConfirm: "notes:confirmDelete",
+        onCancel: "notes:cancelDelete"
+      })}`;
+      document.body.appendChild(modal.firstElementChild!);
+    }
+  }
+
+  async function createNote() {
+    const note = await api.create({ title: "Untitled", content: "" });
+    notes = [note, ...notes];
+    selectedId = note.id;
+    render();
+  }
+
+  async function updateCurrent({ title, content }: { title: string; content: string }) {
+    if (!selectedId) return;
+    try {
+      const updated = await api.update(selectedId, { title, content });
+      notes = notes.map(n => (n.id === selectedId ? updated : n));
+      render();
+    } catch (e) {
+      console.error(e);
+      // Fallback to local if online failed
+      api = getLocalAPI();
+      backendState!.textContent = "Offline (Local)";
+      const updated = await api.update(selectedId, { title, content });
+      notes = notes.map(n => (n.id === selectedId ? updated : n));
+      render();
+    }
+  }
+
+  async function deleteCurrent() {
+    if (!selectedId) return;
+    await api.remove(selectedId);
+    notes = notes.filter(n => n.id !== selectedId);
+    selectedId = notes[0]?.id ?? "";
+    showConfirm = false;
+    render();
+  }
+
+  function wireEvents() {
+    window.addEventListener("notes:select", (e: any) => {
+      selectedId = e.detail.id;
+      render();
+    });
+    window.addEventListener("notes:create", createNote);
+    window.addEventListener("notes:search", (e: any) => {
+      filter = e.detail.q ?? "";
+      render();
+    });
+    window.addEventListener("notes:change", (e: any) => {
+      updateCurrent(e.detail);
+    });
+    window.addEventListener("notes:delete", () => {
+      showConfirm = true;
+      render();
+    });
+    window.addEventListener("notes:confirmDelete", deleteCurrent);
+    window.addEventListener("notes:cancelDelete", () => {
+      showConfirm = false;
+      render();
+    });
+  }
+
+  function ensureThemeInit() {
+    // Ensure theme class is aligned with saved preference before first paint
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved === "dark") document.body.classList.add("dark-theme");
+    } catch {}
+  }
+
+  ensureThemeInit();
+  wireEvents();
+  render();
+</script>

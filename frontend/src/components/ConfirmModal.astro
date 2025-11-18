@@ -1,0 +1,55 @@
+---
+const { message = "Are you sure?", onConfirm = "onConfirm", onCancel = "onCancel", open = false } = Astro.props as {
+  message?: string;
+  onConfirm?: string;
+  onCancel?: string;
+  open?: boolean;
+};
+---
+{open ? (
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Confirmation">
+    <div class="modal">
+      <p class="msg">{message}</p>
+      <div class="row">
+        <button id="confirm" class="btn danger">Delete</button>
+        <button id="cancel" class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+) : null}
+
+<style>
+  .overlay {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: rgba(17,24,39,0.55); z-index: 50;
+  }
+  .modal {
+    width: min(92vw, 420px);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 14px; padding: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  .msg { color: var(--text-color); margin: 0 0 12px; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--surface); color: var(--text-color); cursor: pointer; }
+  .btn.danger { background: #EF4444; color: white; border-color: transparent; }
+</style>
+
+<script>
+  const props = { onConfirm: "<?= onConfirm ?>", onCancel: "<?= onCancel ?>" };
+  function setup() {
+    const overlay = document.getElementById("overlay");
+    const ok = document.getElementById("confirm");
+    const cancel = document.getElementById("cancel");
+    ok?.addEventListener("click", () => window.dispatchEvent(new CustomEvent(props.onConfirm)));
+    cancel?.addEventListener("click", () => window.dispatchEvent(new CustomEvent(props.onCancel)));
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        window.dispatchEvent(new CustomEvent(props.onCancel));
+      }
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setup);
+  else setup();
+</script>

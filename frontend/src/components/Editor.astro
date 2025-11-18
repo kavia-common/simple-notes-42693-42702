@@ -1,0 +1,104 @@
+---
+/**
+ * Editor.astro
+ * Displays and edits a single note with autosave.
+ */
+import type { Note } from "../lib/storage";
+const { note, onChange = "onChange", onDelete = "onDelete" } = Astro.props as {
+  note: Note | null;
+  onChange?: string;
+  onDelete?: string;
+};
+---
+<section class="editor">
+  {note ? (
+    <div class="toolbar">
+      <div class="status">
+        <span class="dot"></span>
+        <span id="updatedAt">Updated {new Date(note.updatedAt).toLocaleString()}</span>
+      </div>
+      <div class="actions">
+        <button id="delete" class="btn danger" aria-label="Delete current note">Delete</button>
+      </div>
+    </div>
+  ) : null}
+  {note ? (
+    <div class="fields">
+      <input id="title" class="title" placeholder="Title" value={note.title} />
+      <textarea id="content" class="content" placeholder="Start writing...">{note.content}</textarea>
+    </div>
+  ) : (
+    <div class="empty">
+      <h2>No note selected</h2>
+      <p>Select a note from the list or create a new one.</p>
+    </div>
+  )}
+</section>
+
+<style>
+  .editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+  .dot { width: 8px; height: 8px; background: #10b981; border-radius: 999px; box-shadow: 0 0 0 3px #10b98122; }
+  .actions { display: flex; gap: 8px; }
+  .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; }
+  .btn.danger { background: #EF4444; color: white; }
+  .btn.danger:hover { filter: brightness(0.95); }
+  .fields { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+  .title {
+    font-size: 20px; font-weight: 600;
+    padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--border-color); background: var(--card-bg);
+    color: var(--text-color); outline: none;
+  }
+  .title:focus { border-color: #2563EB66; box-shadow: 0 0 0 3px #2563EB22; }
+  .content {
+    flex: 1; resize: none; min-height: 240px;
+    padding: 14px; border-radius: 12px;
+    border: 1px solid var(--border-color); background: var(--card-bg);
+    color: var(--text-color); outline: none; line-height: 1.5;
+  }
+  .content:focus { border-color: #2563EB66; box-shadow: 0 0 0 3px #2563EB22; }
+  .empty { display: grid; place-items: center; height: 100%; text-align: center; color: var(--text-secondary); }
+</style>
+
+<script>
+  const props = { onChange: "<?= onChange ?>", onDelete: "<?= onDelete ?>" };
+  function setup() {
+    const title = document.getElementById("title") as HTMLInputElement | null;
+    const content = document.getElementById("content") as HTMLTextAreaElement | null;
+    const del = document.getElementById("delete");
+    if (title && content) {
+      let timer: number | undefined;
+      function emit() {
+        window.dispatchEvent(new CustomEvent(props.onChange, {
+          detail: { title: title.value, content: content.value }
+        }));
+      }
+      function schedule() {
+        clearTimeout(timer);
+        timer = window.setTimeout(emit, 250);
+      }
+      title.addEventListener("input", schedule);
+      content.addEventListener("input", schedule);
+    }
+    del?.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent(props.onDelete));
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setup);
+  } else {
+    setup();
+  }
+</script>
